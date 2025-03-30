@@ -3,16 +3,19 @@
 //linker::input::additional dependensies Msimg32.lib; Winmm.lib
 
 #include "windows.h"
+#include "math.h"
 
 // секция данных игры  
 typedef struct {
-    float x, y, width, height, rad, dx, dy, speed;
+    float x, y, width, height, speed;
     HBITMAP hBitmap;//хэндл к спрайту шарика 
+    bool active;
 } sprite;
 
+const int maze_width = 20;
+const int maze_height = 20;
 sprite racket;//ракетка игрока
-sprite enemy;//ракетка противника
-sprite ball;//шарик
+sprite maze[maze_width][maze_height]; // двумерный массив лабиринта
 
 struct {
     int score, balls;//количество набранных очков и оставшихся "жизней"
@@ -34,36 +37,48 @@ void InitGame()
     //в этой секции загружаем спрайты с помощью функций gdi
     //пути относительные - файлы должны лежать рядом с .exe 
     //результат работы LoadImageA сохраняет в хэндлах битмапов, рисование спрайтов будет произовдиться с помощью этих хэндлов
-    ball.hBitmap = (HBITMAP)LoadImageA(NULL, "ball.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
     racket.hBitmap = (HBITMAP)LoadImageA(NULL, "racket.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
-    enemy.hBitmap = (HBITMAP)LoadImageA(NULL, "racket_enemy.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
     hBack = (HBITMAP)LoadImageA(NULL, "back.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
     //------------------------------------------------------
 
-    racket.width = 300;
+    racket.width = 50;
     racket.height = 50;
-    racket.speed = 30;//скорость перемещения ракетки
-    racket.x = window.width / 2.;//ракетка посередине окна
-    racket.y = window.height - racket.height;//чуть выше низа экрана - на высоту ракетки
+    racket.speed = 10;//скорость перемещения ракетки
+    racket.x = window.width / 3.;//ракетка посередине окна
+    racket.y = window.height / 3;//чуть выше низа экрана - на высоту ракетки
 
-    enemy.x = racket.x;//х координату оппонета ставим в ту же точку что и игрока
-
-    ball.dy = (rand() % 65 + 35) / 100.;//формируем вектор полета шарика
-    ball.dx = -(1 - ball.dy);//формируем вектор полета шарика
-    ball.speed = 11;
-    ball.rad = 20;
-    ball.x = racket.x;//x координата шарика - на середие ракетки
-    ball.y = racket.y - ball.rad;//шарик лежит сверху ракетки
 
     game.score = 0;
     game.balls = 9;
+    for (int i = 0; i < maze_height; i++)
+    {
+        for (int k = 0; k < maze_width; k++)
+        {
+            maze[i][k].active = false;
+            maze[i][k].width = window.width / maze_width;
+            maze[i][k].height = window.height / maze_height;
+            maze[i][k].x = i * maze[i][k].width;
+            maze[i][k].y = k * maze[i][k].height;
 
-   
+            if (i == 0 || i == maze_height - 1 || k == 0 || k == maze_width - 1)
+            {
+                maze[i][k].active = true;
+            }
+
+            if (i == maze_height / 2 && k > maze_height / 4 && k < maze_height - maze_height / 4)
+            {
+                maze[i][k].active = true;
+            }
+
+        }
+    }
+
+
 }
 
 void ProcessSound(const char* name)//проигрывание аудиофайла в формате .wav, файл должен лежать в той же папке где и программа
 {
-    PlaySound(TEXT(name), NULL, SND_FILENAME | SND_ASYNC);//переменная name содежрит имя файла. флаг ASYNC позволяет проигрывать звук паралельно с исполнением программы
+    //PlaySound(TEXT(name), NULL, SND_FILENAME | SND_ASYNC);//переменная name содежрит имя файла. флаг ASYNC позволяет проигрывать звук паралельно с исполнением программы
 }
 
 void ShowScore()
@@ -87,8 +102,71 @@ void ShowScore()
 
 void ProcessInput()
 {
-    if (GetAsyncKeyState(VK_LEFT)) racket.x -= racket.speed;
-    if (GetAsyncKeyState(VK_RIGHT)) racket.x += racket.speed;
+    if (GetAsyncKeyState(VK_LEFT))
+    {
+        int i = (racket.x - racket.speed) / maze[0][0].width;
+        int k = racket.y / maze[0][0].height;
+        int k1 = (racket.y + racket.height - 1) / maze[0][0].height;
+
+        if (!(maze[i][k].active || maze[i][k1].active))
+        {
+            racket.x -= racket.speed;
+        }
+        else
+        {
+            racket.x = (i + 1) * maze[0][0].width;
+        }
+
+    }
+
+    if (GetAsyncKeyState(VK_RIGHT))
+    {
+        int i = (racket.x + racket.speed + racket.width) / maze[0][0].width;
+        int k = racket.y / maze[0][0].height;
+        int k1 = (racket.y + racket.height - 1) / maze[0][0].height;
+
+
+        if (!(maze[i][k].active || maze[i][k1].active))
+        {
+            racket.x += racket.speed;
+        }
+        else
+        {
+            racket.x = i * maze[0][0].width - racket.width;
+        }
+    }
+
+    if (GetAsyncKeyState(VK_DOWN))
+    {
+        int i = racket.x / maze[0][0].width;
+        int k = (racket.y + racket.speed + racket.height) / maze[0][0].height;
+        int i1 = (racket.x + racket.width - 1) / maze[0][0].width;
+
+        if (!(maze[i][k].active || maze[i1][k].active))
+        {
+            racket.y += racket.speed;
+        }
+        else
+        {
+            racket.y = k * maze[0][0].height - racket.height;
+        }
+    }
+    if (GetAsyncKeyState(VK_UP))
+    {
+        int i = racket.x / maze[0][0].width;
+        int k = (racket.y - racket.speed) / maze[0][0].height;
+        int i1 = (racket.x + racket.width - 1) / maze[0][0].width;
+
+        if (!(maze[i][k].active || maze[i1][k].active))
+        {
+            racket.y -= racket.speed;
+        }
+        else
+        {
+            racket.y = (k + 1) * maze[0][0].height;
+        }
+    }
+
 
     if (!game.action && GetAsyncKeyState(VK_SPACE))
     {
@@ -128,109 +206,35 @@ void ShowBitmap(HDC hDC, int x, int y, int x1, int y1, HBITMAP hBitmapBall, bool
 void ShowRacketAndBall()
 {
     ShowBitmap(window.context, 0, 0, window.width, window.height, hBack);//задний фон
-    ShowBitmap(window.context, racket.x - racket.width / 2., racket.y, racket.width, racket.height, racket.hBitmap);// ракетка игрока
 
-    if (ball.dy < 0 && (enemy.x - racket.width / 4 > ball.x || ball.x > enemy.x + racket.width / 4))
+    for (int i = 0; i < maze_height; i++)
     {
-        //имитируем разумность оппонента. на самом деле, компьютер никогда не проигрывает, и мы не считаем попадает ли его ракетка по шарику
-        //вместо этого, мы всегда делаем отскок от потолка, а раектку противника двигаем - подставляем под шарик
-        //движение будет только если шарик летит вверх, и только если шарик по оси X выходит за пределы половины длины ракетки
-        //в этом случае, мы смешиваем координаты ракетки и шарика в пропорции 9 к 1
-        enemy.x = ball.x * .1 + enemy.x * .9;
-    }
+        for (int k = 0; k < maze_width; k++)
+        {
+            if (maze[i][k].active)
+            {
+                ShowBitmap(window.context, maze[i][k].x, maze[i][k].y, maze[i][k].width, maze[i][k].height, racket.hBitmap);
+            }
+        }
 
-    ShowBitmap(window.context, enemy.x - racket.width / 2, 0, racket.width, racket.height, enemy.hBitmap);//ракетка оппонента
-    ShowBitmap(window.context, ball.x - ball.rad, ball.y - ball.rad, 2 * ball.rad, 2 * ball.rad, ball.hBitmap, true);// шарик
+
+    }
+    ShowBitmap(window.context, racket.x, racket.y, racket.width, racket.height, racket.hBitmap);// ракетка игрока
 }
 
 void LimitRacket()
 {
-    racket.x = max(racket.x, racket.width / 2.);//если коодината левого угла ракетки меньше нуля, присвоим ей ноль
-    racket.x = min(racket.x, window.width - racket.width / 2.);//аналогично для правого угла
+    racket.x = max(racket.x, 0);//если коодината левого угла ракетки меньше нуля, присвоим ей ноль
+    racket.x = min(racket.x, window.width - racket.width);//аналогично для правого угла
+    racket.y = max(racket.y, 0);//если коодината левого угла ракетки меньше нуля, присвоим ей ноль
+    racket.y = min(racket.y, window.height - racket.height);//аналогично для правого угла
 }
 
-void CheckWalls()
-{
-    if (ball.x < ball.rad || ball.x > window.width - ball.rad)
-    {
-        ball.dx *= -1;
-        ProcessSound("bounce.wav");
-    }
-}
 
-void CheckRoof()
-{
-    if (ball.y < ball.rad + racket.height)
-    {
-        ball.dy *= -1;
-        ProcessSound("bounce.wav");
-    }
-}
 
-bool tail = false;
 
-void CheckFloor()
-{
-    if (ball.y > window.height - ball.rad - racket.height)//шарик пересек линию отскока - горизонталь ракетки
-    {
-        if (!tail && ball.x >= racket.x - racket.width / 2. - ball.rad && ball.x <= racket.x + racket.width / 2. + ball.rad)//шарик отбит, и мы не в режиме обработки хвоста
-        {
-            game.score++;//за каждое отбитие даем одно очко
-            ball.speed += 5. / game.score;//но увеличиваем сложность - прибавляем скорости шарику
-            ball.dy *= -1;//отскок
-            racket.width -= 10. / game.score;//дополнительно уменьшаем ширину ракетки - для сложности
-            ProcessSound("bounce.wav");//играем звук отскока
-        }
-        else
-        {//шарик не отбит
 
-            tail = true;//дадим шарику упасть ниже ракетки
 
-            if (ball.y - ball.rad > window.height)//если шарик ушел за пределы окна
-            {
-                game.balls--;//уменьшаем количество "жизней"
-
-                ProcessSound("fail.wav");//играем звук
-
-                if (game.balls < 0) { //проверка условия окончания "жизней"
-
-                    MessageBoxA(window.hWnd, "game over", "", MB_OK);//выводим сообщение о проигрыше
-                    InitGame();//переинициализируем игру
-                }
-
-                ball.dy = (rand() % 65 + 35) / 100.;//задаем новый случайный вектор для шарика
-                ball.dx = -(1 - ball.dy);
-                ball.x = racket.x;//инициализируем координаты шарика - ставим его на ракетку
-                ball.y = racket.y - ball.rad;
-                game.action = false;//приостанавливаем игру, пока игрок не нажмет пробел
-                tail = false;
-            }
-        }
-    }
-}
-
-void ProcessRoom()
-{
-    //обрабатываем стены, потолок и пол. принцип - угол падения равен углу отражения, а значит, для отскока мы можем просто инвертировать часть вектора движения шарика
-    CheckWalls();
-    CheckRoof();
-    CheckFloor();
-}
-
-void ProcessBall()
-{
-    if (game.action)
-    {
-        //если игра в активном режиме - перемещаем шарик
-        ball.x += ball.dx * ball.speed;
-        ball.y += ball.dy * ball.speed;
-    }
-    else
-    {
-        //иначе - шарик "приклеен" к ракетке
-        ball.x = racket.x;
-    }
-}
 
 void InitWindow()
 {
@@ -253,13 +257,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     _In_ LPWSTR    lpCmdLine,
     _In_ int       nCmdShow)
 {
-    
+
     InitWindow();//здесь инициализируем все что нужно для рисования в окне
     InitGame();//здесь инициализируем переменные игры
 
-    mciSendString(TEXT("play ..\\Debug\\music.mp3 repeat"), NULL, 0, NULL);
+    //mciSendString(TEXT("play ..\\Debug\\music.mp3 repeat"), NULL, 0, NULL);
     ShowCursor(NULL);
-    
+
     while (!GetAsyncKeyState(VK_ESCAPE))
     {
         ShowRacketAndBall();//рисуем фон, ракетку и шарик
@@ -269,8 +273,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
         ProcessInput();//опрос клавиатуры
         LimitRacket();//проверяем, чтобы ракетка не убежала за экран
-        ProcessBall();//перемещаем шарик
-        ProcessRoom();//обрабатываем отскоки от стен и каретки, попадание шарика в картетку
     }
 
 }
