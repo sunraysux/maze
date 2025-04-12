@@ -4,16 +4,21 @@
 
 #include "windows.h"
 #include "math.h"
+#include "maze.h"
+
+enum class cellType {
+    empty, wall,door
+};
 
 // секция данных игры  
 typedef struct {
     float x, y, width, height, speed;
     HBITMAP hBitmap;//хэндл к спрайту шарика 
-    bool active;
+    cellType cell;
 } sprite;
 
-const int maze_width = 20;
-const int maze_height = 20;
+const int maze_width = 25;
+const int maze_height = 25;
 sprite racket;//ракетка игрока
 sprite maze[maze_width][maze_height]; // двумерный массив лабиринта
 
@@ -32,12 +37,93 @@ HBITMAP hBack;// хэндл для фонового изображения
 
 //cекция кода
 
+HBITMAP load(const char* name)
+{
+    return (HBITMAP)LoadImageA(NULL, name, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+}
+
+
+void genLevel()
+{
+    for (int i = 0; i < maze_height; i++)
+    {
+        for (int k = 0; k < maze_width; k++)
+        {
+            maze[i][k].cell = cellType::empty;
+            maze[i][k].width = window.width / maze_width;
+            maze[i][k].height = window.height / maze_height;
+            maze[i][k].x = i * maze[i][k].width;
+            maze[i][k].y = k * maze[i][k].height;
+
+            if (i == 0 || i == maze_height - 1 || k == 0 || k == maze_width - 1)
+            {
+                maze[i][k].cell = cellType::wall;
+            }
+
+            if (i == maze_height / 2 && k > maze_height / 4 && k < maze_height - maze_height / 4)
+            {
+                maze[i][k].cell = cellType::wall;
+            }
+
+        }
+    }
+}
+
+void genLevel2()
+{
+    for (int i = 0; i < maze_height; i++) {
+        for (int k = 0; k < maze_width; k++) {
+            maze[i][k].hBitmap = load("racket_enemy.bmp");
+            maze[i][k].cell = cellType::empty;
+            maze[i][k].width = window.width / (float)maze_width;
+            maze[i][k].height = window.height / (float)maze_height;
+            maze[i][k].x = i * maze[i][k].width;
+            maze[i][k].y = k * maze[i][k].height;
+        }
+    }
+
+    auto maze_ = MazeGenerator::generate((maze_width-1)/2, (maze_width-1)/2);
+    
+    int x = 0;int y = 0;
+
+
+    for (unsigned i = 0; i < maze_.get()->size(); i++)
+    {
+        for (unsigned j = 0; j < maze_.get()->at(0).size(); j++)
+        {
+            auto a = maze_.get()->at(i).at(j);
+            if (a == 35) {
+                maze[y][x].cell = cellType::wall;
+            }
+            x++;
+        }
+        x = 0;;
+        y++;
+
+        maze[maze_height -2][maze_width-1].cell = cellType::door;
+    }
+
+
+    for (int i = 0; i < maze_height; i++) 
+    {
+        for (int k = 0; k < maze_width; k++) 
+        {
+            if (maze[i][k].cell == cellType::door)
+            {
+                maze[i][k].hBitmap = load("racket.bmp");
+            }
+        }
+           
+    }
+}
+
+
 void InitGame()
 {
     //в этой секции загружаем спрайты с помощью функций gdi
     //пути относительные - файлы должны лежать рядом с .exe 
     //результат работы LoadImageA сохраняет в хэндлах битмапов, рисование спрайтов будет произовдиться с помощью этих хэндлов
-    racket.hBitmap = (HBITMAP)LoadImageA(NULL, "racket.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+    racket.hBitmap = load("racket.bmp");
     hBack = (HBITMAP)LoadImageA(NULL, "back.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
     //------------------------------------------------------
 
@@ -50,28 +136,8 @@ void InitGame()
 
     game.score = 0;
     game.balls = 9;
-    for (int i = 0; i < maze_height; i++)
-    {
-        for (int k = 0; k < maze_width; k++)
-        {
-            maze[i][k].active = false;
-            maze[i][k].width = window.width / maze_width;
-            maze[i][k].height = window.height / maze_height;
-            maze[i][k].x = i * maze[i][k].width;
-            maze[i][k].y = k * maze[i][k].height;
-
-            if (i == 0 || i == maze_height - 1 || k == 0 || k == maze_width - 1)
-            {
-                maze[i][k].active = true;
-            }
-
-            if (i == maze_height / 2 && k > maze_height / 4 && k < maze_height - maze_height / 4)
-            {
-                maze[i][k].active = true;
-            }
-
-        }
-    }
+    
+    genLevel2();
 
 
 }
@@ -108,7 +174,7 @@ void ProcessInput()
         int k = racket.y / maze[0][0].height;
         int k1 = (racket.y + racket.height - 1) / maze[0][0].height;
 
-        if (!(maze[i][k].active || maze[i][k1].active))
+        if (!(maze[i][k].cell == cellType::wall || maze[i][k1].cell == cellType::wall))
         {
             racket.x -= racket.speed;
         }
@@ -126,7 +192,7 @@ void ProcessInput()
         int k1 = (racket.y + racket.height - 1) / maze[0][0].height;
 
 
-        if (!(maze[i][k].active || maze[i][k1].active))
+        if (!(maze[i][k].cell == cellType::wall || maze[i][k1].cell == cellType::wall))
         {
             racket.x += racket.speed;
         }
@@ -142,7 +208,7 @@ void ProcessInput()
         int k = (racket.y + racket.speed + racket.height) / maze[0][0].height;
         int i1 = (racket.x + racket.width - 1) / maze[0][0].width;
 
-        if (!(maze[i][k].active || maze[i1][k].active))
+        if (!(maze[i][k].cell == cellType::wall || maze[i1][k].cell == cellType::wall))
         {
             racket.y += racket.speed;
         }
@@ -157,7 +223,7 @@ void ProcessInput()
         int k = (racket.y - racket.speed) / maze[0][0].height;
         int i1 = (racket.x + racket.width - 1) / maze[0][0].width;
 
-        if (!(maze[i][k].active || maze[i1][k].active))
+        if (!(maze[i][k].cell == cellType::wall || maze[i1][k].cell == cellType::wall))
         {
             racket.y -= racket.speed;
         }
@@ -211,9 +277,9 @@ void ShowRacketAndBall()
     {
         for (int k = 0; k < maze_width; k++)
         {
-            if (maze[i][k].active)
+            if (maze[i][k].cell != cellType::empty)
             {
-                ShowBitmap(window.context, maze[i][k].x, maze[i][k].y, maze[i][k].width, maze[i][k].height, racket.hBitmap);
+                ShowBitmap(window.context, maze[i][k].x, maze[i][k].y, maze[i][k].width, maze[i][k].height, maze[i][k].hBitmap);
             }
         }
 

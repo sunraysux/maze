@@ -42,4 +42,9 @@
     </Media>
     <Media Include="..\Debug\music.mp3" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="maze.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>
